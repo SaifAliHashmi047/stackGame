@@ -1,0 +1,20 @@
+pluginManagement { includeBuild("../node_modules/@react-native/gradle-plugin") }
+
+plugins { id("com.facebook.react.settings") }
+
+// AsyncStorage v3 bundles org.asyncstorage.shared_storage:storage-android in node_modules (not Maven Central).
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = file("${rootDir}/../node_modules/@react-native-async-storage/async-storage/android/local_repo").toURI()
+        }
+    }
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
+rootProject.name = 'StackHouse'
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')

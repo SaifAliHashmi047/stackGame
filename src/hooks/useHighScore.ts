@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getBestScore, saveBestScore } from '../utils/scoreStorage';
+import { getBestScore, saveBestScore, addToLeaderboard } from '../utils/scoreStorage';
 
 export function useHighScore() {
   const [bestScore, setBestScore] = useState(0);
@@ -8,10 +8,13 @@ export function useHighScore() {
     getBestScore().then(setBestScore);
   }, []);
 
-  /** Saves score if it's a new best. Returns true if a new best was set. */
+  /**
+   * Called on every game over. Saves every score to the leaderboard.
+   * Also updates the all-time best. Returns true if a new best was set.
+   */
   const updateIfBest = useCallback(
     async (score: number): Promise<boolean> => {
-      // Re-read from storage to avoid stale in-memory value
+      await addToLeaderboard(score);
       const stored = await getBestScore();
       if (score > stored) {
         await saveBestScore(score);

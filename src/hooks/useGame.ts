@@ -15,11 +15,8 @@ import {
   INITIAL_SPEED,
   ISO_DX,
   PERFECT_BONUS,
-  PERFECT_THRESHOLD,
   SCREEN_HEIGHT,
   SCREEN_WIDTH,
-  SPEED_BUMP_EVERY,
-  SPEED_INCREMENT,
   SPEED_MAX,
 } from '../constants/config';
 import { calculateOverlap, isPerfect, Block, CutoffPiece } from '../utils/gameLogic';
@@ -75,7 +72,6 @@ export function useGame(): GameStore {
   const scoreRef = useRef(0);
   const comboRef = useRef(0);
   const isGameOverRef = useRef(false);
-  const speedRef = useRef(INITIAL_SPEED);
 
   // Sync refs every render (fine without concurrent mode)
   blocksRef.current = blocks;
@@ -99,12 +95,15 @@ export function useGame(): GameStore {
     const startX = -(blockWidth + ISO_DX);
     const endX = SCREEN_WIDTH + blockWidth;
 
-    // Reset position and direction for the fresh block
-    movingX.value = startX;
-    directionRef.current = 1;
+    // Each new block randomly comes from left or right
+    const fromLeft = Math.random() < 0.5;
+    movingX.value = fromLeft ? startX : endX;
+    directionRef.current = fromLeft ? 1 : -1;
 
     const id = setInterval(() => {
-      let next = movingX.value + directionRef.current * speedRef.current;
+      // Speed grows continuously with every block placed — smooth gradual increase
+      const speed = Math.min(SPEED_MAX, INITIAL_SPEED + blocksRef.current.length * 0.08);
+      let next = movingX.value + directionRef.current * speed;
       if (next >= endX) {
         next = endX;
         directionRef.current = -1;
@@ -219,16 +218,10 @@ export function useGame(): GameStore {
       popScore();
     }
 
-    // Speed bump every N blocks
-    const newTotal = blocksRef.current.length; // still old ref but close enough
-    if (newTotal % SPEED_BUMP_EVERY === 0) {
-      speedRef.current = Math.min(SPEED_MAX, speedRef.current + SPEED_INCREMENT);
-    }
   }, []); // empty — all reactive reads via refs
 
   // ── Restart ───────────────────────────────────────────────────────────────
   const restart = useCallback(() => {
-    speedRef.current = INITIAL_SPEED;
     scoreRef.current = 0;
     comboRef.current = 0;
     isGameOverRef.current = false;

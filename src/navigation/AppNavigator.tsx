@@ -9,11 +9,13 @@ import {
 import HomeScreen from '../screens/HomeScreen';
 import GameScreen from '../screens/GameScreen';
 import GameOverScreen from '../screens/GameOverScreen';
+import LeaderboardScreen from '../screens/LeaderboardScreen';
 
 export type RootStackParamList = {
   Home: undefined;
   Game: undefined;
   GameOver: { score: number; isNewBest: boolean };
+  Leaderboard: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -55,6 +57,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Game" component={GameScreen} />
         <Stack.Screen name="GameOver" component={GameOverScreen} />
+        <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

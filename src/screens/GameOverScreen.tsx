@@ -113,6 +113,14 @@ export default function GameOverScreen({ route, navigation }: Props) {
             <Text style={styles.btnSecondaryText}>HOME</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.btnSecondary}
+            onPress={() => navigation.navigate('Leaderboard')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.btnSecondaryText}>LEADERBOARD</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.btnShare} onPress={handleShare} activeOpacity={0.8}>
             <Text style={styles.btnShareText}>SHARE SCORE</Text>
           </TouchableOpacity>

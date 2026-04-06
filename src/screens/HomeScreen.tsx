@@ -61,6 +61,10 @@ export default function HomeScreen({ navigation }: Props) {
     navigation.navigate('Game');
   };
 
+  const handleLeaderboard = () => {
+    navigation.navigate('Leaderboard');
+  };
+
   return (
     <LinearGradient colors={theme.gradientColors} style={styles.gradient}>
       <Animated.View style={[styles.container, containerStyle]}>
@@ -99,13 +103,18 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
 
         {/* Tap to play */}
-        <TouchableOpacity
-          style={[styles.tapArea, { paddingBottom: insets.bottom + 40 }]}
-          onPress={handlePlay}
-          activeOpacity={1}
-        >
-          <Animated.Text style={[styles.tapText, tapStyle]}>TAP TO PLAY</Animated.Text>
-        </TouchableOpacity>
+        <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 28 }]}>
+          <TouchableOpacity style={styles.tapArea} onPress={handlePlay} activeOpacity={1}>
+            <Animated.Text style={[styles.tapText, tapStyle]}>TAP TO PLAY</Animated.Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.leaderboardBtn}
+            onPress={handleLeaderboard}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.leaderboardText}>LEADERBOARD</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </LinearGradient>
   );
@@ -173,6 +182,10 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     opacity: 0.85,
   },
+  bottomArea: {
+    alignItems: 'center',
+    gap: 16,
+  },
   tapArea: {
     alignItems: 'center',
     paddingTop: 20,
@@ -185,5 +198,19 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+  },
+  leaderboardBtn: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  leaderboardText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 3,
   },
 });

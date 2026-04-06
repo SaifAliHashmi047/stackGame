@@ -1,5 +1,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
+import { BANNER_AD_UNIT_ID } from '../constants/adConfig';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -67,6 +69,14 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <LinearGradient colors={theme.gradientColors} style={styles.gradient}>
+      {/* Banner ad — pinned to bottom */}
+      <View style={styles.bannerContainer}>
+        <BannerAd
+          unitId={BANNER_AD_UNIT_ID}
+          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          requestOptions={{ requestNonPersonalizedAdsOnly: true }}
+        />
+      </View>
       <Animated.View style={[styles.container, containerStyle]}>
         <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
           {/* Logo */}
@@ -212,5 +222,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 3,
+  },
+  bannerContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
   },
 });

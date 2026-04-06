@@ -46,6 +46,7 @@ export interface GameStore {
   score: number;
   combo: number;
   isGameOver: boolean;
+  isPaused: boolean;
   isPerfectPlacement: boolean;
   cutoffPieces: CutoffPiece[];
   topBlock: Block;
@@ -55,6 +56,8 @@ export interface GameStore {
   scoreScale: ReturnType<typeof useSharedValue<number>>;
   // Actions
   onTap: (currentX: number) => void;
+  pause: () => void;
+  resume: () => void;
   restart: () => void;
 }
 
@@ -64,6 +67,7 @@ export function useGame(): GameStore {
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [isPerfectPlacement, setIsPerfectPlacement] = useState(false);
   const [cutoffPieces, setCutoffPieces] = useState<CutoffPiece[]>([]);
 
@@ -72,12 +76,14 @@ export function useGame(): GameStore {
   const scoreRef = useRef(0);
   const comboRef = useRef(0);
   const isGameOverRef = useRef(false);
+  const isPausedRef = useRef(false);
 
   // Sync refs every render (fine without concurrent mode)
   blocksRef.current = blocks;
   scoreRef.current = score;
   comboRef.current = combo;
   isGameOverRef.current = isGameOver;
+  isPausedRef.current = isPaused;
 
   // ── Reanimated Shared Values ──────────────────────────────────────────────
   const movingX = useSharedValue(-(BLOCK_WIDTH_INITIAL + ISO_DX));
@@ -101,6 +107,7 @@ export function useGame(): GameStore {
     directionRef.current = fromLeft ? 1 : -1;
 
     const id = setInterval(() => {
+      if (isPausedRef.current) return; // block stays frozen while paused
       // Speed grows continuously with every block placed — smooth gradual increase
       const speed = Math.min(SPEED_MAX, INITIAL_SPEED + blocksRef.current.length * 0.08);
       let next = movingX.value + directionRef.current * speed;
@@ -139,7 +146,7 @@ export function useGame(): GameStore {
 
   // ── Tap handler (called from UI thread via runOnJS) ───────────────────────
   const onTap = useCallback((currentX: number) => {
-    if (isGameOverRef.current) return;
+    if (isGameOverRef.current || isPausedRef.current) return;
 
     const currentBlocks = blocksRef.current;
     const top = currentBlocks[currentBlocks.length - 1];
@@ -220,15 +227,21 @@ export function useGame(): GameStore {
 
   }, []); // empty — all reactive reads via refs
 
+  // ── Pause / Resume ────────────────────────────────────────────────────────
+  const pause = useCallback(() => { setIsPaused(true); }, []);
+  const resume = useCallback(() => { setIsPaused(false); }, []);
+
   // ── Restart ───────────────────────────────────────────────────────────────
   const restart = useCallback(() => {
     scoreRef.current = 0;
     comboRef.current = 0;
     isGameOverRef.current = false;
+    isPausedRef.current = false;
     directionRef.current = 1;
     setScore(0);
     setCombo(0);
     setIsGameOver(false);
+    setIsPaused(false);
     setIsPerfectPlacement(false);
     setCutoffPieces([]);
     cameraOffset.value = withSpring(0, CAMERA_SPRING);
@@ -250,6 +263,9 @@ export function useGame(): GameStore {
     cameraOffset,
     scoreScale,
     onTap,
+    isPaused,
+    pause,
+    resume,
     restart,
   };
 }

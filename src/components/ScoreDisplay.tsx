@@ -11,6 +11,8 @@ interface ScoreDisplayProps {
   isBestBeaten?: boolean;
 }
 
+const BEST_CARD_WIDTH = 72;
+
 const ScoreDisplay = memo(
   ({ score, bestScore, scoreScale, isBestBeaten = false }: ScoreDisplayProps) => {
     const insets = useSafeAreaInsets();
@@ -20,8 +22,14 @@ const ScoreDisplay = memo(
     }));
 
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 12 }]} pointerEvents="none">
-        {/* Current score — center */}
+      <View
+        style={[styles.container, { paddingTop: insets.top + 12 }]}
+        pointerEvents="none"
+      >
+        {/* Left spacer — mirrors the bestCard width so score is truly centered */}
+        <View style={styles.spacer} />
+
+        {/* Current score — center of screen */}
         <View style={styles.center}>
           <Animated.Text style={[styles.score, scoreStyle]}>{score}</Animated.Text>
         </View>
@@ -48,8 +56,12 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     zIndex: 20,
+  },
+  // Same width as bestCard so the flex center column is truly centered on screen
+  spacer: {
+    width: BEST_CARD_WIDTH,
   },
   center: {
     flex: 1,
@@ -72,7 +84,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.hudBorder,
     alignItems: 'center',
-    minWidth: 68,
+    width: BEST_CARD_WIDTH,
   },
   bestLabel: {
     fontSize: 10,

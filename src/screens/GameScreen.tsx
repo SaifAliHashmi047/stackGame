@@ -17,6 +17,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import LinearGradient from 'react-native-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BannerAd,
   BannerAdSize,
@@ -49,39 +50,67 @@ import { BANNER_AD_UNIT_ID, INTERSTITIAL_AD_UNIT_ID } from '../constants/adConfi
 
 type Props = StackScreenProps<RootStackParamList, 'Game'>;
 
+// Must match ScoreDisplay so pause button sits in the exact same left zone
+const HUD_PADDING_TOP = 12; // added to insets.top in ScoreDisplay
+const HUD_PADDING_H = 16;
+const BEST_CARD_WIDTH = 72;
+const PAUSE_BTN_SIZE = 38;
+
 const TOWER_HEIGHT = SCREEN_HEIGHT * 12;
 
 export default function GameScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const game = useGame();
   const { bestScore, updateIfBest } = useHighScore();
   const { lightImpact, mediumImpact, errorFeedback } = useHaptics();
   const { playTap, playPerfect, playCombo, playGameOver } = useSound();
 
   const [isNewBest, setIsNewBest] = useState(false);
-  const interstitialShownRef = useRef(false);
 
-  // Interstitial ad
-  const { isLoaded: interstitialLoaded, load: loadInterstitial, show: showInterstitial, isClosed: interstitialClosed } =
-    useInterstitialAd(INTERSTITIAL_AD_UNIT_ID);
+  // ── Interstitial ad ───────────────────────────────────────────────────────
+  const {
+    isLoaded: interstitialLoaded,
+    load: loadInterstitial,
+    show: showInterstitial,
+    isClosed: interstitialClosed,
+  } = useInterstitialAd(INTERSTITIAL_AD_UNIT_ID);
 
-  // Perfect label animation
-  const perfectOpacity = useSharedValue(0);
-  const perfectScale = useSharedValue(0.5);
+  // pendingAd = true means "we want to show the interstitial as soon as it loads"
+  const [pendingAd, setPendingAd] = useState(false);
 
-  // Track previous game over state to fire only once
-  const wasGameOverRef = useRef(false);
-
-  // ── Load interstitial at mount ────────────────────────────────────────────
+  // Pre-load ad at mount
   useEffect(() => {
     loadInterstitial();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reload after it's closed so it's ready for next game
+  // Re-load after close so it's ready for the next game
   useEffect(() => {
     if (interstitialClosed) {
       loadInterstitial();
     }
   }, [interstitialClosed, loadInterstitial]);
+
+  // React to ad becoming loaded: if we're still waiting, show it now
+  useEffect(() => {
+    if (!interstitialLoaded || !pendingAd) return;
+    setPendingAd(false);
+    // Small delay so the game-over overlay is visible before the full-screen ad
+    const t = setTimeout(() => {
+      try {
+        showInterstitial();
+      } catch {
+        // No internet or ad became unavailable — skip silently
+      }
+    }, 900);
+    return () => clearTimeout(t);
+  }, [interstitialLoaded, pendingAd, showInterstitial]);
+
+  // ── Perfect label animation ───────────────────────────────────────────────
+  const perfectOpacity = useSharedValue(0);
+  const perfectScale = useSharedValue(0.5);
+
+  // Tracks whether this game-over has already been handled
+  const wasGameOverRef = useRef(false);
 
   // ── Tap gesture ─────────────────────────────────────────────────────────────
   const tapGesture = Gesture.Tap().onEnd(() => {
@@ -125,29 +154,26 @@ export default function GameScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.blocks.length]);
 
-  // Game over: haptics, save score, show interstitial
+  // Game-over: one-shot handler that triggers haptics, score save, and queues the ad
   useEffect(() => {
     if (game.isGameOver && !wasGameOverRef.current) {
       wasGameOverRef.current = true;
-      interstitialShownRef.current = false;
       errorFeedback();
       playGameOver();
       updateIfBest(game.score).then(newBest => setIsNewBest(newBest));
 
-      // Show interstitial with a small delay to let the game-over overlay appear first
-      setTimeout(() => {
-        if (!interstitialShownRef.current && interstitialLoaded) {
-          interstitialShownRef.current = true;
-          showInterstitial();
-        }
-      }, 1200);
+      // Queue the interstitial.
+      // If already loaded → the pendingAd effect above fires immediately.
+      // If not yet loaded (slow/no internet) → fires when (and if) it loads.
+      setPendingAd(true);
     }
     if (!game.isGameOver) {
       wasGameOverRef.current = false;
+      setPendingAd(false);
       setIsNewBest(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.isGameOver, interstitialLoaded]);
+  }, [game.isGameOver]);
 
   // ── Animated styles ───────────────────────────────────────────────────────
   const cameraStyle = useAnimatedStyle(() => ({
@@ -173,7 +199,7 @@ export default function GameScreen({ navigation }: Props) {
     (game.blocks.length - 1) * BLOCK_STEP -
     (BLOCK_HEIGHT + ISO_DY) / 2;
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── Navigation / actions ──────────────────────────────────────────────────
   const handleHome = useCallback(() => {
     navigation.navigate('Home');
   }, [navigation]);
@@ -182,7 +208,6 @@ export default function GameScreen({ navigation }: Props) {
     game.restart();
   }, [game]);
 
-  // ── Pause handling ────────────────────────────────────────────────────────
   const handlePausePress = useCallback(() => {
     if (game.isGameOver) return;
     game.pause();
@@ -193,9 +218,16 @@ export default function GameScreen({ navigation }: Props) {
   }, [game]);
 
   const handleQuit = useCallback(() => {
-    game.resume(); // reset pause state before leaving
+    game.resume();
     navigation.navigate('Home');
   }, [game, navigation]);
+
+  // ── Pause button position — pixel-perfect aligned with ScoreDisplay ───────
+  // ScoreDisplay uses: paddingTop = insets.top + HUD_PADDING_TOP, paddingHorizontal = HUD_PADDING_H
+  // The left zone (spacer) is BEST_CARD_WIDTH wide starting at HUD_PADDING_H.
+  // We center the pause button inside that zone vertically and horizontally.
+  const pauseBtnTop = insets.top + HUD_PADDING_TOP;
+  const pauseBtnLeft = HUD_PADDING_H + (BEST_CARD_WIDTH - PAUSE_BTN_SIZE) / 2;
 
   return (
     <View style={styles.root}>
@@ -207,7 +239,7 @@ export default function GameScreen({ navigation }: Props) {
       {/* Tap-to-place gesture area — full screen */}
       <GestureDetector gesture={tapGesture}>
         <View style={StyleSheet.absoluteFill}>
-          {/* Tower container */}
+          {/* Tower */}
           <Animated.View style={[styles.tower, cameraStyle]}>
             <View style={styles.ground} />
 
@@ -255,9 +287,9 @@ export default function GameScreen({ navigation }: Props) {
         </View>
       </GestureDetector>
 
-      {/* ── HUD — rendered above GestureDetector ─────────────────────────── */}
+      {/* ── HUD — above GestureDetector ──────────────────────────────────── */}
 
-      {/* Score (centered) + Best card */}
+      {/* Score centered + Best card top-right (pointerEvents=none inside) */}
       <ScoreDisplay
         score={game.score}
         bestScore={bestScore}
@@ -265,13 +297,13 @@ export default function GameScreen({ navigation }: Props) {
         isBestBeaten={isNewBest}
       />
 
-      {/* Pause button — top left */}
+      {/* Pause button — top-left, exactly mirroring the Best card position */}
       {!game.isGameOver && (
         <TouchableOpacity
-          style={styles.pauseBtn}
+          style={[styles.pauseBtn, { top: pauseBtnTop, left: pauseBtnLeft }]}
           onPress={handlePausePress}
           activeOpacity={0.7}
-          hitSlop={{ top: 10, left: 10, bottom: 10, right: 10 }}
+          hitSlop={{ top: 8, left: 8, bottom: 8, right: 8 }}
         >
           <View style={styles.pauseIconRow}>
             <View style={styles.pauseBar} />
@@ -280,7 +312,7 @@ export default function GameScreen({ navigation }: Props) {
         </TouchableOpacity>
       )}
 
-      {/* "PERFECT!" flash */}
+      {/* PERFECT flash */}
       {game.isPerfectPlacement && (
         <Animated.View style={[styles.perfectLabel, perfectLabelStyle]} pointerEvents="none">
           <Text style={styles.perfectText}>PERFECT!</Text>
@@ -369,14 +401,14 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 20,
   },
+
   // ── Pause button ──────────────────────────────────────────────────────────
+  // top / left are set dynamically via inline style using insets
   pauseBtn: {
     position: 'absolute',
-    top: 52,
-    left: 20,
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: PAUSE_BTN_SIZE,
+    height: PAUSE_BTN_SIZE,
+    borderRadius: 11,
     backgroundColor: 'rgba(0,0,0,0.28)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
@@ -394,6 +426,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.9)',
   },
+
   // ── Pause overlay ─────────────────────────────────────────────────────────
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -448,6 +481,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.5,
   },
+
   // ── Banner ────────────────────────────────────────────────────────────────
   bannerContainer: {
     position: 'absolute',

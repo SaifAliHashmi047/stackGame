@@ -7,13 +7,13 @@ import {
   View,
 } from 'react-native';
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { runOnJS } from 'react-native-worklets';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import LinearGradient from 'react-native-linear-gradient';
 import { StackScreenProps } from '@react-navigation/stack';
@@ -75,8 +75,8 @@ export default function GameScreen({ navigation }: Props) {
     isClosed: interstitialClosed,
   } = useInterstitialAd(INTERSTITIAL_AD_UNIT_ID);
 
-  // pendingAd = true means "we want to show the interstitial as soon as it loads"
-  const [pendingAd, setPendingAd] = useState(false);
+  // Ref instead of state: no re-render means no effect cleanup that would cancel the timeout
+  const pendingAdRef = useRef(false);
 
   // Pre-load ad at mount
   useEffect(() => {
@@ -90,20 +90,14 @@ export default function GameScreen({ navigation }: Props) {
     }
   }, [interstitialClosed, loadInterstitial]);
 
-  // React to ad becoming loaded: if we're still waiting, show it now
+  // Handles the "ad loads AFTER game over" case (slow / delayed connection)
   useEffect(() => {
-    if (!interstitialLoaded || !pendingAd) return;
-    setPendingAd(false);
-    // Small delay so the game-over overlay is visible before the full-screen ad
-    const t = setTimeout(() => {
-      try {
-        showInterstitial();
-      } catch {
-        // No internet or ad became unavailable — skip silently
-      }
+    if (!interstitialLoaded || !pendingAdRef.current) return;
+    pendingAdRef.current = false; // ref write — no re-render, no cleanup cancellation
+    setTimeout(() => {
+      try { showInterstitial(); } catch { /* no internet / unavailable — skip */ }
     }, 900);
-    return () => clearTimeout(t);
-  }, [interstitialLoaded, pendingAd, showInterstitial]);
+  }, [interstitialLoaded, showInterstitial]);
 
   // ── Perfect label animation ───────────────────────────────────────────────
   const perfectOpacity = useSharedValue(0);
@@ -154,7 +148,7 @@ export default function GameScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.blocks.length]);
 
-  // Game-over: one-shot handler that triggers haptics, score save, and queues the ad
+  // Game-over: one-shot handler — haptics, score, interstitial
   useEffect(() => {
     if (game.isGameOver && !wasGameOverRef.current) {
       wasGameOverRef.current = true;
@@ -162,14 +156,22 @@ export default function GameScreen({ navigation }: Props) {
       playGameOver();
       updateIfBest(game.score).then(newBest => setIsNewBest(newBest));
 
-      // Queue the interstitial.
-      // If already loaded → the pendingAd effect above fires immediately.
-      // If not yet loaded (slow/no internet) → fires when (and if) it loads.
-      setPendingAd(true);
+      if (interstitialLoaded) {
+        // Ad is already in memory — schedule directly.
+        // The other effect won't re-run because interstitialLoaded didn't change.
+        setTimeout(() => {
+          try { showInterstitial(); } catch { /* skip if unavailable */ }
+        }, 900);
+      } else {
+        // Ad not ready yet — mark pending.
+        // The other effect fires when (and if) isLoaded becomes true.
+        // If there's no internet it stays false forever → ad is silently skipped.
+        pendingAdRef.current = true;
+      }
     }
     if (!game.isGameOver) {
       wasGameOverRef.current = false;
-      setPendingAd(false);
+      pendingAdRef.current = false;
       setIsNewBest(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -353,7 +355,7 @@ export default function GameScreen({ navigation }: Props) {
       <View style={styles.bannerContainer}>
         <BannerAd
           unitId={BANNER_AD_UNIT_ID}
-          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          size={BannerAdSize.BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         />
       </View>
@@ -429,7 +431,11 @@ const styles = StyleSheet.create({
 
   // ── Pause overlay ─────────────────────────────────────────────────────────
   pauseOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.62)',
     alignItems: 'center',
     justifyContent: 'center',

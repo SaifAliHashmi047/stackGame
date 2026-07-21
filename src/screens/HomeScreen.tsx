@@ -73,7 +73,7 @@ export default function HomeScreen({ navigation }: Props) {
       <View style={styles.bannerContainer}>
         <BannerAd
           unitId={BANNER_AD_UNIT_ID}
-          size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+          size={BannerAdSize.BANNER}
           requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         />
       </View>
